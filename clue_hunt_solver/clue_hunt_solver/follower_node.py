@@ -1,31 +1,4 @@
 #!/usr/bin/env python3
-"""
-follower_node.py -- camera-only follower for the Clue Chain Hunt (Inter IIT Bootcamp, Phase 2)
-
-Uses ONLY the follower's own camera (ArUco id 49 on the leader's back, DICT_4X4_50, 0.12 m) and its
-own wheel odometry.  No LiDAR, no map, no leader data.
-
-Why this version exists
------------------------
-The previous follower stopped printing / following after the leader started scanning: the leader
-spins in place, the tag on its back turns away, the camera loses it and nothing brought it back.
-This node has an explicit state machine:
-
-    TRACK   tag visible.  Range/bearing -> (v, w).  Forward speed is scaled by cos(bearing)^2 and
-            is zero when the heading error is large, so it never drives forward at full speed while
-            turning at full speed (the old failure).  A feed-forward on the filtered range rate
-            keeps up with a moving leader.  Backs up slowly if the leader comes closer than d_min.
-    HOLD    tag lost.  Stop (never keep a stale command), keep the camera pointed at the leader's
-            last known position (dead-reckoned in odom) and wait: a spinning leader shows its tag
-            again within one sweep.
-    SEARCH  still nothing after hold_sec.  Rotate in place through 360 deg (never drive blind),
-            then go back to HOLD facing the last known position, alternate the turn direction, repeat
-            forever.
-
-Topic names are auto-discovered (anything with 'follower' in the name) unless you pass them as
-parameters.  Check with:   ros2 topic list | grep follower
-Output: /follower/cmd_vel (geometry_msgs/Twist)
-"""
 
 import math
 import traceback
