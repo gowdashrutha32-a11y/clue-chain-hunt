@@ -1,42 +1,4 @@
 #!/usr/bin/env python3
-"""
-hunt_node.py  --  Leader robot autonomy for the Clue Chain Hunt (Inter IIT Bootcamp, Phase 2)
-
-Design
-------
-One node, one explicit state machine, driven by a 10 Hz timer.  The camera callback only
-stores the newest frame; all vision happens inside the states that need it, and ONLY while the
-robot is standing still (no motion blur, no races with Nav2).
-
-    INIT -> SCAN_DWELL <-> SCAN_SPIN
-              |  board marker seen
-              v
-           APPROACH (Nav2 to a stand-off pose 1.2 m in front of the board, facing it)
-              v
-            READ  (ArUco id check + QR decode + id/token validation, pose averaged)
-              v
-          dispatch(command):
-              GOTO x y        -> go_to_target(map point)
-              REL dx dy       -> go_to_target(board_pose + offset in board frame)
-              PILLAR c        -> locate pillar (camera bearing + LiDAR range) -> ring of vantage points
-              BETWEEN c1 c2 t -> locate both pillars -> go_to_target(A + t (B-A))
-              TREASURE REL .. -> publish /hunt/treasure, drive onto it, DONE
-
-Key ideas
----------
-* Board pose = solvePnP on the ArUco corners -> camera frame -> map frame (TF2).  The pose gives us
-  the board NORMAL, so we park in FRONT of the board, facing it, instead of "back up along the
-  robot's heading".  It is also what makes REL / TREASURE REL possible.
-* Token check accepts a few plausible readings of "SHA-1 of the previous clue" (full text,
-  text without the HUNT: prefix, command only) and LOGS which one matched.  Lock it down
-  once you know the exact rule from the starter README.
-* Decoys (wrong id in the QR) and look-alikes (right id, wrong token) are rejected and their map
-  position is remembered, so we never walk back to them.
-* If a scan finds nothing: visit a ring of vantage points around where the board should be,
-  then hop toward open space (LiDAR) and scan again.  It never gives up.
-
-Everything topic/frame related is a ROS parameter -- check them against the starter README.
-"""
 
 import hashlib
 import math
@@ -65,28 +27,6 @@ try:
     from pyzbar.pyzbar import decode as zbar_decode
 except Exception:  # pragma: no cover
     zbar_decode = None
-
-
-# ----------------------------------------------------------------------------------------------
-# small math helpers
-# ----------------------------------------------------------------------------------------------
-CLUE_RE = re.compile(r'^HUNT:(\d+):([0-9A-Fa-f]{4}):(.*)$', re.DOTALL)
-NUM_RE = re.compile(r'[-+]?(?:\d+\.\d*|\.\d+|\d+)')
-
-# optical frame (x right, y down, z forward) -> ROS body convention (x forward, y left, z up)
-R_OPT_TO_LINK = np.array([[0.0, 0.0, 1.0],
-                          [-1.0, 0.0, 0.0],
-                          [0.0, -1.0, 0.0]])
-
-HSV_RANGES = {
-    'RED': [((0, 100, 80), (10, 255, 255)), ((170, 100, 80), (180, 255, 255))],
-    'ORANGE': [((11, 120, 100), (19, 255, 255))],
-    'YELLOW': [((20, 80, 60), (40, 255, 255))],
-    'GREEN': [((35, 80, 60), (85, 255, 255))],
-    'BLUE': [((90, 80, 60), (135, 255, 255))],
-    'PURPLE': [((136, 60, 50), (160, 255, 255))],
-}
-
 
 def wrap(a):
     return math.atan2(math.sin(a), math.cos(a))
